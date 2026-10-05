@@ -61,6 +61,7 @@ internal sealed class EntityReparentedProcessor(Entities entities) : IClientPack
             // Move this to a resolver if there ends up being a lot of custom reparenting logic
             if (entityType == typeof(InventoryItemEntity))
             {
+                RemoveFromOldContainer(entity.Value, packet.OldParentId);
                 InventoryItemReparented(entity.Value, newParent);
             }
             else
@@ -69,6 +70,27 @@ internal sealed class EntityReparentedProcessor(Entities entities) : IClientPack
             }
         }
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    ///     Makes sure the item doesn't stay listed in the container it is leaving. This also undoes a local move rejected by the server,
+    ///     which replies with the container the item was wrongly moved to as <paramref name="oldParentId"/>.
+    /// </summary>
+    private static void RemoveFromOldContainer(GameObject entity, NitroxId oldParentId)
+    {
+        if (oldParentId == null || !NitroxEntity.TryGetObjectFrom(oldParentId, out GameObject oldParent))
+        {
+            return;
+        }
+
+        Optional<ItemsContainer> opContainer = InventoryContainerHelper.TryGetContainerByOwner(oldParent);
+        if (opContainer.HasValue && entity.TryGetComponent(out Pickupable pickupable))
+        {
+            using (PacketSuppressor<PlayerQuickSlotsBindingChanged>.Suppress())
+            {
+                opContainer.Value.RemoveItem(pickupable, true);
+            }
+        }
     }
 
     private void InventoryItemReparented(GameObject entity, GameObject newParent)

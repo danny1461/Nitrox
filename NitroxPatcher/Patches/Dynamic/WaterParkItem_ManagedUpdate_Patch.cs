@@ -32,7 +32,9 @@ public sealed partial class WaterParkItem_ManagedUpdate_Patch : NitroxPatch, IDy
             Resolve<SimulationOwnership>().HasAnyLockType(itemId) &&
             __instance.currentWaterPark.AliveOrNull().TryGetIdOrWarn(out NitroxId parentId))
         {
-            Resolve<IPacketSender>().Send(new EntityReparented(itemId, parentId));
+            // No expected parent: only the item's simulation owner sends this, and water park items may be registered under
+            // either the water park or its planter, so a check could wrongly reject the move
+            Resolve<IPacketSender>().Send(new EntityReparented(itemId, parentId, null));
         }
     }
 }

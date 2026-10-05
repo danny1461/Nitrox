@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Nitrox.Model.DataStructures;
 using Nitrox.Model.Subnautica.DataStructures.GameLogic.Entities;
 using Nitrox.Model.Subnautica.DataStructures.GameLogic.Entities.Metadata;
@@ -18,6 +19,11 @@ public class ItemContainers
     private readonly EntityMetadataManager entityMetadataManager;
     private readonly Items items;
     private readonly Entities entities;
+
+    /// <summary>
+    ///     Container owner each item was last removed from, used as <see cref="EntityReparented.OldParentId"/> once it is added somewhere else.
+    /// </summary>
+    private readonly Dictionary<NitroxId, NitroxId> lastOwnerIdByItemId = [];
 
     public ItemContainers(IPacketSender packetSender, EntityMetadataManager entityMetadataManager, Items items, Entities entities)
     {
@@ -66,9 +72,30 @@ public class ItemContainers
             return;
         }
 
-        if (packetSender.Send(new EntityReparented(itemId, ownerId)))
+        lastOwnerIdByItemId.TryGetValue(itemId, out NitroxId oldOwnerId);
+        lastOwnerIdByItemId.Remove(itemId);
+
+        if (packetSender.Send(new EntityReparented(itemId, ownerId, oldOwnerId)))
         {
             Log.Debug($"Sent: Added item ({itemId}) of type {pickupable.GetTechType()} to container {containerTransform.gameObject.GetFullHierarchyPath()}");
+        }
+    }
+
+    public void RecordItemRemoved(Pickupable pickupable, Transform containerTransform)
+    {
+        if (!pickupable || !pickupable.TryGetNitroxId(out NitroxId itemId))
+        {
+            return;
+        }
+
+        // An unknown previous owner only means that the server won't verify the next move of this item
+        if (containerTransform.parent && InventoryContainerHelper.TryGetOwnerId(containerTransform, out NitroxId ownerId))
+        {
+            lastOwnerIdByItemId[itemId] = ownerId;
+        }
+        else
+        {
+            lastOwnerIdByItemId.Remove(itemId);
         }
     }
 
